@@ -1,0 +1,5 @@
+psutil
+platformdirs
+openpyxl
+gputil
+tabulate
