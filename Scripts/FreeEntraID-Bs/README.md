@@ -1,6 +1,6 @@
 # Entra ID Free sucks but this will help
 
-Okay so basically, I recently went through a little bit of a headache trying to get one of my customers on Entra ID but they were unable to get proper licensing, however, they had business Standard which comes with Entra ID for free. 
+Okay so basically, I recently went through a little bit of a headache trying to get one of my customers on Entra ID because they were unable to get proper licensing, however, they had business Standard which comes with Entra ID for free. 
 Slight rant, its cool and all, you can add devices to the cloud domain like you would expect... however it doesn't work like you'd expect with on prem... heres the issue, when you go to login for the first time as a user from that 
 domain, it will ask you to create a pin... for EACH machine that SAME USER logs into, thats because you should buy the right license. However, fuck that. So heres what you need to know, a "how to" if you will:
 
