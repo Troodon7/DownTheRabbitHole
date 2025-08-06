@@ -24,3 +24,5 @@ To run this:
     ```
     python bruteforce_ssh.py 192.168.1.101 -u root -P wordlist.txt
     ```
+
+I last used this in 2021, not sure if its up to date.
