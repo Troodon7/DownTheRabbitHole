@@ -1,0 +1,16 @@
+
+#!/bin/bash
+
+#sudo apt-get install gksu
+
+#sleep 30
+
+sudo nano /etc/hostname
+
+sudo nano /etc/hosts
+
+echo "You have 2 minutes to save and close everything before a forced reboot"
+
+sleep 120
+
+reboot

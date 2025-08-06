@@ -1,0 +1,5 @@
+#!/bin/bash
+
+sleep 60
+
+gnome-terminal --full-screen -e /home/kiosk/mainscript
