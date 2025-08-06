@@ -1,0 +1,1 @@
+powershell.exe -ExecutionPolicy Bypass -NoLogo -NonInteractive -WindowStyle Hidden -File "\\your file location\No-Pin-Workaround-EntraID.ps1"
