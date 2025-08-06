@@ -1,0 +1,1 @@
+Start-Process powershell -Verb runAs -argument "set-executionpolicy remotesigned"
