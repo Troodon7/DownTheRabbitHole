@@ -1,25 +1,59 @@
 # PreviewPanelFix
 
-Ever open Windows Explorer on a network share and the preview panel just stares at you blankly for PDFs? This is why — Windows doesn't trust the file path because the network server isn't in your Local Intranet zone, so the PDF handler refuses to render it.
+Windows Explorer won't show PDF (or other file) previews for files on mapped network drives by default. The reason is that Windows doesn't trust the network path, so the preview handler refuses to render it. This set of scripts fixes that by adding your mapped drive servers to the Local Intranet trusted zone — the same thing you'd do manually through Internet Options.
 
-This fixes that. It scans all your mapped drives, pulls the server name (or IP) out of each UNC path, and writes the right registry entries under `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains` so Windows treats those locations as Local Intranet. No admin rights needed since it's all HKCU.
+## How it works
+
+For IP-based servers the script writes to:
+```
+HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges\RangeN
+  *      REG_DWORD  1
+  :Range REG_SZ     192.168.x.x
+```
+
+For hostname-based servers it writes to:
+```
+HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains\servername
+  *  REG_DWORD  1
+```
+
+This matches exactly what Internet Options writes when you add a site manually. No admin rights needed since it's all HKCU.
 
 ## Usage
 
-Double-click `PreviewPanelFix.bat` — it handles the execution policy bypass and calls the script automatically.
+Double-click `PreviewPanelFix.bat` — it handles the execution policy bypass automatically.
 
-Dry run to see what would change before touching anything:
-
+Dry run to preview changes without writing anything:
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File "PreviewPanelFix.ps1" -WhatIf
 ```
 
-Changes take effect for new Explorer windows immediately. If previews still aren't showing after running it, sign out and back in to flush the zone cache.
+After running, open a new Explorer window and try the preview pane on a file from the mapped drive.
+If it still doesn't work, sign out and back in to flush the zone cache.
+
+## PDF preview handler requirement
+
+The zone trust alone isn't enough — you also need a PDF viewer that registers a Windows Explorer preview handler. **Microsoft Edge does not do this** even when set as the default PDF app; this is a known limitation. The script will warn you if no working handler is found.
+
+Working options (all free):
+- **Adobe Acrobat Reader** — after install, go to Preferences > General > enable "Enable PDF Thumbnail previews in Windows Explorer"
+- **Foxit PDF Reader**
+- **PDF-XChange Viewer**
 
 ## Files
 
-- **PreviewPanelFix.bat** — double-click launcher, passes `-WhatIf` through
-- **PreviewPanelFix.ps1** — main script; reads mapped drives from 4 sources, writes to ZoneMap\Domains, auto-cleans any bad Ranges entries from older runs
-- **PreviewPanelFixCleanup.bat** — double-click launcher for the cleanup script
-- **PreviewPanelFixCleanup.ps1** — removes bad ZoneMap\Ranges entries that show as `:Range:` with a square character in the Local Intranet Sites UI
-- **PreviewPanelFixDiag.ps1** — diagnostic script; run this and paste the output if the fix script isn't detecting your drives
+| File | Purpose |
+|------|---------|
+| `PreviewPanelFix.bat` | Double-click launcher |
+| `PreviewPanelFix.ps1` | Main script — detects mapped drives, writes zone entries, checks PDF handler |
+| `PreviewPanelFixCleanup.bat` | Double-click launcher for cleanup |
+| `PreviewPanelFixCleanup.ps1` | Removes zone entries — see warning below |
+| `PreviewPanelFixDiag.ps1` | Diagnostic script — run and paste output if something isn't working |
+
+## Cleanup script warning
+
+`PreviewPanelFixCleanup.ps1 -Reset` removes **all** matching entries from `ZoneMap\Ranges` and `ZoneMap\Domains`, not just the ones this script added. If you've manually added other sites to the Local Intranet zone, those will be removed too.
+
+The regular run (no `-Reset`) only removes leftover entries from older broken versions of this script and is safe to run anytime.
+
+A future improvement would scope `-Reset` to only remove entries matching your currently mapped drives. For now, use it with that in mind — it's an admin tool, not something end users should run.

@@ -2,8 +2,12 @@
 # Cleans up entries written by PreviewPanelFix.
 #
 # Usage:
-#   .\PreviewPanelFixCleanup.ps1         - remove bad Ranges entries only
-#   .\PreviewPanelFixCleanup.ps1 -Reset  - also remove Domains entries (full wipe, re-run fix after)
+#   .\PreviewPanelFixCleanup.ps1         - remove legacy bad entries only (safe)
+#   .\PreviewPanelFixCleanup.ps1 -Reset  - wipe ALL ZoneMap Ranges and Domains entries
+#
+# WARNING: -Reset removes ALL Local Intranet zone entries, not just ones added by
+# PreviewPanelFix. Any sites you added manually will also be removed. Re-run
+# PreviewPanelFix.bat afterwards to restore the mapped drive entries.
 
 param(
     [switch]$Reset
@@ -16,7 +20,11 @@ $DomainsPSH = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings
 Write-Host ''
 Write-Host 'PreviewPanelFix - Cleanup' -ForegroundColor Cyan
 Write-Host '-------------------------' -ForegroundColor Cyan
-if ($Reset) { Write-Host '  (Reset mode - Domains entries will also be removed)' -ForegroundColor Yellow }
+if ($Reset) {
+    Write-Host '  WARNING: Reset mode removes ALL Local Intranet zone entries,' -ForegroundColor Red
+    Write-Host '  not just ones added by PreviewPanelFix. Manually added sites' -ForegroundColor Red
+    Write-Host '  will also be removed. Run PreviewPanelFix.bat when done.' -ForegroundColor Red
+}
 Write-Host ''
 
 # --- Remove bad Ranges entries ---
