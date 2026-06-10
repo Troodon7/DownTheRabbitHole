@@ -11,8 +11,6 @@ param(
     [switch]$WhatIf
 )
 
-$ErrorActionPreference = 'Stop'
-
 $DomainsPath  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
 $RangesPath   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
 $IntranetZone = 1
@@ -21,29 +19,41 @@ function Get-MappedDriveServers {
     $servers  = @{}
     $uncPaths = @()
 
-    # HKCU:\Network is always visible regardless of elevation level
-    $regDrives = Get-ChildItem 'HKCU:\Network' -ErrorAction SilentlyContinue
-    foreach ($drive in $regDrives) {
-        $remote = (Get-ItemProperty -Path $drive.PSPath -ErrorAction SilentlyContinue).RemotePath
-        if ($remote) { $uncPaths += $remote }
-    }
+    # Source 1: HKCU:\Network registry key
+    try {
+        $regDrives = Get-ChildItem 'HKCU:\Network' -ErrorAction SilentlyContinue
+        foreach ($drive in $regDrives) {
+            $remote = (Get-ItemProperty -Path $drive.PSPath -ErrorAction SilentlyContinue).RemotePath
+            if ($remote) { $uncPaths += $remote }
+        }
+    } catch {}
 
-    # Fallback: Get-SmbMapping (may be empty when elevated)
-    if ($uncPaths.Count -eq 0) {
-        try {
-            $uncPaths = (Get-SmbMapping -ErrorAction Stop).RemotePath
-        } catch {}
-    }
+    # Source 2: Get-PSDrive (FileSystem provider, network roots)
+    try {
+        $psDrives = Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue |
+                    Where-Object { $_.DisplayRoot -like '\\*' }
+        foreach ($d in $psDrives) {
+            if ($d.DisplayRoot -notin $uncPaths) { $uncPaths += $d.DisplayRoot }
+        }
+    } catch {}
 
-    # Fallback: net use output
-    if ($uncPaths.Count -eq 0) {
+    # Source 3: Get-SmbMapping
+    try {
+        $smb = Get-SmbMapping -ErrorAction SilentlyContinue
+        foreach ($m in $smb) {
+            if ($m.RemotePath -notin $uncPaths) { $uncPaths += $m.RemotePath }
+        }
+    } catch {}
+
+    # Source 4: net use
+    try {
         $netLines = & net use 2>&1
         foreach ($line in $netLines) {
             if ($line -match '(\\\\[^\s]+)') {
-                $uncPaths += $Matches[1]
+                if ($Matches[1] -notin $uncPaths) { $uncPaths += $Matches[1] }
             }
         }
-    }
+    } catch {}
 
     foreach ($unc in $uncPaths) {
         if ($unc -match '^\\\\([^\\]+)') {
