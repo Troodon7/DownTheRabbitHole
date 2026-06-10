@@ -11,7 +11,10 @@ param(
     [switch]$WhatIf
 )
 
-$DomainsPath  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
+$DomainsPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
+$DomainsReg  = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
+$RangesReg   = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
+$RangesPSH   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
 $IntranetZone = 1
 
 function Get-MappedDriveServers {
@@ -66,31 +69,76 @@ function Get-MappedDriveServers {
     return $servers
 }
 
-function Add-ServerToIntranet {
-    param([string]$Server, [string]$UncPath)
+# IP addresses: ZoneMap\Ranges\RangeN with * = DWORD 1 and :Range = REG_SZ (IP)
+# This matches exactly what Internet Options writes when adding an IP manually.
+function Add-IPToIntranet {
+    param([string]$IP, [string]$UncPath)
 
-    $keyPath    = Join-Path $DomainsPath $Server
-    $existing   = Get-ItemProperty -Path $keyPath -Name '*' -ErrorAction SilentlyContinue
-    $alreadySet = $existing -and $existing.'*' -eq $IntranetZone
+    $alreadySet = $false
+    $existingKey = $null
+
+    $queryOut = & reg query $RangesReg 2>&1
+    foreach ($line in $queryOut) {
+        if ($line -match '\\(Range\d+)\s*$') {
+            $fullKey  = "$RangesReg\$($Matches[1])"
+            $rangeOut = & reg query $fullKey /v ':Range' 2>&1
+            if ($rangeOut -match [regex]::Escape($IP)) {
+                $alreadySet  = $true
+                $existingKey = $fullKey
+                break
+            }
+        }
+    }
 
     if ($WhatIf) {
         if ($alreadySet) {
-            Write-Host "  OK     $Server  ($UncPath) - already set" -ForegroundColor DarkGray
+            Write-Host "  OK     $IP  ($UncPath) - already set" -ForegroundColor DarkGray
         } else {
-            Write-Host "  WOULD ADD  $Server  ($UncPath)" -ForegroundColor Cyan
+            Write-Host "  WOULD ADD  $IP  ($UncPath)" -ForegroundColor Cyan
         }
         return
     }
 
-    if (-not (Test-Path $keyPath)) {
-        New-Item -Path $keyPath -Force | Out-Null
+    if ($alreadySet) {
+        & reg add $existingKey /v '*'      /t REG_DWORD /d 1   /f 2>&1 | Out-Null
+        & reg add $existingKey /v ':Range' /t REG_SZ    /d $IP /f 2>&1 | Out-Null
+        Write-Host "  OK     $IP  ($UncPath) - verified" -ForegroundColor DarkGray
+        return
     }
-    Set-ItemProperty -Path $keyPath -Name '*' -Value $IntranetZone -Type DWord
+
+    $n = 1
+    while (Test-Path "$RangesPSH\Range$n") { $n++ }
+    $newKey = "$RangesReg\Range$n"
+
+    & reg add $newKey /f                                        2>&1 | Out-Null
+    & reg add $newKey /v '*'      /t REG_DWORD /d 1   /f       2>&1 | Out-Null
+    & reg add $newKey /v ':Range' /t REG_SZ    /d $IP /f       2>&1 | Out-Null
+
+    Write-Host "  ADDED  $IP  ($UncPath) -> Range$n" -ForegroundColor Green
+}
+
+# Hostnames: ZoneMap\Domains\hostname with * = DWORD 1
+function Add-HostnameToIntranet {
+    param([string]$Hostname, [string]$UncPath)
+
+    $existing   = & reg query "$DomainsReg\$Hostname" /v '*' 2>&1
+    $alreadySet = $existing -match '\*\s+REG_DWORD\s+0x1'
+
+    if ($WhatIf) {
+        if ($alreadySet) {
+            Write-Host "  OK     $Hostname  ($UncPath) - already set" -ForegroundColor DarkGray
+        } else {
+            Write-Host "  WOULD ADD  $Hostname  ($UncPath)" -ForegroundColor Cyan
+        }
+        return
+    }
+
+    & reg add "$DomainsReg\$Hostname" /v '*' /t REG_DWORD /d 1 /f 2>&1 | Out-Null
 
     if ($alreadySet) {
-        Write-Host "  OK     $Server  ($UncPath) - verified" -ForegroundColor DarkGray
+        Write-Host "  OK     $Hostname  ($UncPath) - verified" -ForegroundColor DarkGray
     } else {
-        Write-Host "  ADDED  $Server  ($UncPath)" -ForegroundColor Green
+        Write-Host "  ADDED  $Hostname  ($UncPath)" -ForegroundColor Green
     }
 }
 
@@ -114,22 +162,14 @@ Write-Host "Found $($servers.Count) mapped drive server(s):"
 Write-Host ''
 
 foreach ($entry in $servers.GetEnumerator()) {
-    Add-ServerToIntranet -Server $entry.Key -UncPath $entry.Value
-}
+    $server = $entry.Key
+    $unc    = $entry.Value
+    $isIP   = $server -match '^\d{1,3}(\.\d{1,3}){3}$'
 
-# Clean up any bad Ranges entries written by earlier versions of this script
-if (-not $WhatIf) {
-    $rangesReg = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
-    $queryOut  = & reg query $rangesReg 2>&1
-    foreach ($line in $queryOut) {
-        if ($line -match '\\(Range\d+)\s*$') {
-            $fullKey  = "$rangesReg\$($Matches[1])"
-            $valueOut = & reg query $fullKey /v '<ip>' 2>&1
-            if ($valueOut -match '<ip>') {
-                & reg delete $fullKey /f 2>&1 | Out-Null
-                Write-Host "  CLEANED  removed bad Ranges entry: $($Matches[1])" -ForegroundColor DarkYellow
-            }
-        }
+    if ($isIP) {
+        Add-IPToIntranet       -IP       $server -UncPath $unc
+    } else {
+        Add-HostnameToIntranet -Hostname $server -UncPath $unc
     }
 }
 

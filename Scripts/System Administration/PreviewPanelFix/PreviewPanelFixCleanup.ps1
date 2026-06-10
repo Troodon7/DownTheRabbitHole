@@ -41,25 +41,43 @@ if ($removedRanges -eq 0) {
     Write-Host '  Nothing to clean up.' -ForegroundColor DarkGray
 }
 
-# --- Remove Domains entries (Reset mode only) ---
+# --- Remove Ranges and Domains entries (Reset mode only) ---
 if ($Reset) {
     Write-Host ''
+    Write-Host 'Checking ZoneMap\Ranges...' -ForegroundColor Cyan
+    $removedReset = 0
+    $queryOut = & reg query $RangesReg 2>&1
+    foreach ($line in $queryOut) {
+        if ($line -match '\\(Range\d+)\s*$') {
+            $rangeName = $Matches[1]
+            $fullKey   = "$RangesReg\$rangeName"
+            $rangeOut  = & reg query $fullKey /v ':Range' 2>&1
+            if ($rangeOut -notmatch 'ERROR') {
+                $ip = ($rangeOut | Select-String ':Range') -replace '.*:Range\s+\S+\s+', ''
+                & reg delete $fullKey /f 2>&1 | Out-Null
+                Write-Host "  REMOVED  $rangeName  ($($ip.Trim()))" -ForegroundColor Green
+                $removedReset++
+            }
+        }
+    }
+
+    Write-Host ''
     Write-Host 'Checking ZoneMap\Domains...' -ForegroundColor Cyan
-    $removedDomains = 0
     $queryOut = & reg query $DomainsReg 2>&1
     foreach ($line in $queryOut) {
         if ($line -match '\\([^\\\s]+)\s*$') {
             $subkey  = $Matches[1]
             $fullKey = "$DomainsReg\$subkey"
-            $valOut  = & reg query $fullKey /v file 2>&1
+            $valOut  = & reg query $fullKey /v '*' 2>&1
             if ($valOut -match '\*\s+REG_DWORD\s+0x1') {
                 & reg delete $fullKey /f 2>&1 | Out-Null
                 Write-Host "  REMOVED  $subkey" -ForegroundColor Green
-                $removedDomains++
+                $removedReset++
             }
         }
     }
-    if ($removedDomains -eq 0) {
+
+    if ($removedReset -eq 0) {
         Write-Host '  Nothing to clean up.' -ForegroundColor DarkGray
     }
 }
