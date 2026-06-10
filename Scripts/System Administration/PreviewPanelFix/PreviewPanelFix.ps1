@@ -183,11 +183,17 @@ Write-Host ''
 Write-Host 'Checking PDF preview handler...' -ForegroundColor Cyan
 
 $previewHandlerGuid = '{8895b1c6-b41f-4c1c-a562-0d564250836f}'
-$handlerPaths = @(
-    "HKCU:\SOFTWARE\Classes\.pdf\ShellEx\$previewHandlerGuid",
-    "HKCR:\.pdf\ShellEx\$previewHandlerGuid",
-    "HKLM:\SOFTWARE\Classes\.pdf\ShellEx\$previewHandlerGuid"
-)
+
+# Get the ProgID for .pdf so we can also check ProgID\ShellEx
+$pdfProgId = $null
+try { $pdfProgId = (Get-ItemProperty 'HKCR:\.pdf' -ErrorAction SilentlyContinue).'(default)' } catch {}
+
+$handlerPaths = @("HKCU:\SOFTWARE\Classes\.pdf\ShellEx\$previewHandlerGuid",
+                  "HKCR:\.pdf\ShellEx\$previewHandlerGuid",
+                  "HKLM:\SOFTWARE\Classes\.pdf\ShellEx\$previewHandlerGuid")
+if ($pdfProgId) {
+    $handlerPaths += "HKCR:\$pdfProgId\ShellEx\$previewHandlerGuid"
+}
 
 $handlerFound = $false
 foreach ($path in $handlerPaths) {
@@ -204,9 +210,12 @@ foreach ($path in $handlerPaths) {
             try { if (-not $serverPath) { $serverPath = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\CLSID\$clsid\InprocServer32" -ErrorAction SilentlyContinue).'(default)' } } catch {}
             $label = if ($name) { $name } else { $clsid }
 
-            # Edge registers a CLSID for .pdf but does not implement the Explorer
-            # preview pane interface - check name AND server path for edge references
-            $isEdge = ($label -match 'Edge|msedge') -or ($serverPath -match 'edge|msedge')
+            # Edge does not implement the Explorer preview pane interface.
+            # Detect it via ProgID (MSEdgeHTM), handler name, or server path.
+            $isEdge = ($pdfProgId -match 'MSEdge') -or
+                      ($label      -match 'Edge|msedge') -or
+                      ($serverPath -match 'edge|msedge')
+
             if ($isEdge) {
                 Write-Host '  WARNING  Microsoft Edge is registered as the PDF handler but does not' -ForegroundColor Yellow
                 Write-Host '           support the Windows Explorer preview pane - previews will not work.' -ForegroundColor Yellow
