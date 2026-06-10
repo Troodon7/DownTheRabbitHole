@@ -53,6 +53,40 @@ $zonePaths = @(
     @{ Label = 'HKLM Policy ZoneMap\Ranges (policy)';  Path = 'HKLM\Software\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges' }
 )
 
+Write-Host '=== PDF Handler ===' -ForegroundColor Cyan
+
+# Default app for .pdf
+$pdfDefault = $null
+try { $pdfDefault = (Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice' -ErrorAction SilentlyContinue).ProgId } catch {}
+try { if (-not $pdfDefault) { $pdfDefault = (Get-ItemProperty 'HKCR:\.pdf' -ErrorAction SilentlyContinue).'(default)' } } catch {}
+Write-Host "  Default .pdf association : $pdfDefault"
+
+# Preview handler CLSID registered for .pdf
+$previewGuid = '{8895b1c6-b41f-4c1c-a562-0d564250836f}'
+$clsid = $null
+$clsidSource = $null
+foreach ($p in @("HKCU:\SOFTWARE\Classes\.pdf\ShellEx\$previewGuid", "HKCR:\.pdf\ShellEx\$previewGuid", "HKLM:\SOFTWARE\Classes\.pdf\ShellEx\$previewGuid")) {
+    try {
+        $v = (Get-ItemProperty $p -ErrorAction SilentlyContinue).'(default)'
+        if ($v) { $clsid = $v; $clsidSource = $p; break }
+    } catch {}
+}
+Write-Host "  Preview handler CLSID    : $(if ($clsid) { $clsid } else { '(none registered)' })"
+Write-Host "  Registered at            : $(if ($clsidSource) { $clsidSource } else { 'N/A' })"
+
+if ($clsid) {
+    $handlerName = $null
+    $serverPath  = $null
+    try { $handlerName = (Get-ItemProperty "HKCR:\CLSID\$clsid"                                     -ErrorAction SilentlyContinue).'(default)' } catch {}
+    try { if (-not $handlerName) { $handlerName = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\CLSID\$clsid" -ErrorAction SilentlyContinue).'(default)' } } catch {}
+    try { $serverPath = (Get-ItemProperty "HKCR:\CLSID\$clsid\InprocServer32"                       -ErrorAction SilentlyContinue).'(default)' } catch {}
+    try { if (-not $serverPath) { $serverPath = (Get-ItemProperty "HKCR:\CLSID\$clsid\LocalServer32"     -ErrorAction SilentlyContinue).'(default)' } } catch {}
+    try { if (-not $serverPath) { $serverPath = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\CLSID\$clsid\InprocServer32" -ErrorAction SilentlyContinue).'(default)' } } catch {}
+    Write-Host "  Handler name             : $(if ($handlerName) { $handlerName } else { '(no name found)' })"
+    Write-Host "  Server path              : $(if ($serverPath)  { $serverPath  } else { '(no path found)' })"
+}
+Write-Host ''
+
 Write-Host '=== ZoneMap Locations ===' -ForegroundColor Cyan
 foreach ($z in $zonePaths) {
     Write-Host "  $($z.Label):" -ForegroundColor Yellow
