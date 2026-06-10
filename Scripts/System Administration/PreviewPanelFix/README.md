@@ -50,10 +50,9 @@ Working options (all free):
 | `PreviewPanelFixCleanup.ps1` | Removes zone entries — see warning below |
 | `PreviewPanelFixDiag.ps1` | Diagnostic script — run and paste output if something isn't working |
 
-## Cleanup script warning
+## Cleanup script
 
-`PreviewPanelFixCleanup.ps1 -Reset` removes **all** matching entries from `ZoneMap\Ranges` and `ZoneMap\Domains`, not just the ones this script added. If you've manually added other sites to the Local Intranet zone, those will be removed too.
+`PreviewPanelFixCleanup.ps1` has two modes:
 
-The regular run (no `-Reset`) only removes leftover entries from older broken versions of this script and is safe to run anytime.
-
-A future improvement would scope `-Reset` to only remove entries matching your currently mapped drives. For now, use it with that in mind — it's an admin tool, not something end users should run.
+- **No flag** — removes only leftover entries from older broken versions of this script (legacy `<ip>`-named entries). Safe to run anytime, won't touch anything else.
+- **`-Reset`** — removes entries for your **currently mapped drives only**, then prompts you to re-run `PreviewPanelFix.bat` to re-add them cleanly. Manually added sites for other servers are left untouched.
