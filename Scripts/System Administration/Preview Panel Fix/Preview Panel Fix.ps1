@@ -1,50 +1,30 @@
 #Requires -Version 3.0
-<#
-.SYNOPSIS
-    Adds mapped drive UNC servers to the Windows Local Intranet trusted zone.
-
-.DESCRIPTION
-    Scans all mapped network drives, extracts the server/hostname from each UNC
-    path, and writes the appropriate registry entries under Internet Settings
-    ZoneMap so Windows treats those file paths as Local Intranet. This fixes
-    PDF (and other file) preview failures in Windows Explorer for network shares.
-
-    Hostnames go into ZoneMap\Domains\<hostname>  (file = DWORD 1)
-    IP addresses go into ZoneMap\Ranges\RangeN    (:Range = DWORD 1, <ip> = IP)
-
-    No admin rights required - changes are per-user (HKCU).
-
-.PARAMETER WhatIf
-    Show what would be added without writing any registry keys.
-
-.EXAMPLE
-    .\Add-MappedDrivesToIntranet.ps1
-    .\Add-MappedDrivesToIntranet.ps1 -WhatIf
-#>
+# Adds mapped drive UNC servers to the Windows Local Intranet trusted zone.
+# Fixes PDF and file preview failures in Windows Explorer on network shares.
+# No admin rights required - changes are per-user (HKCU).
+#
+# Usage:
+#   .\Preview Panel Fix.ps1           - apply changes
+#   .\Preview Panel Fix.ps1 -WhatIf   - dry run, no changes written
 
 param(
     [switch]$WhatIf
 )
 
-Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$DomainsPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
-$RangesPath  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
+$DomainsPath  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
+$RangesPath   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
 $IntranetZone = 1
 
-# ---------------------------------------------------------------------------
-# Collect mapped drives -> hashtable of server -> drive letter
-# ---------------------------------------------------------------------------
 function Get-MappedDriveServers {
-    $servers = [ordered]@{}
-
-    # Prefer Get-SmbMapping (Win8+); fall back to parsing net use output
+    $servers  = @{}
     $uncPaths = @()
+
     try {
         $uncPaths = (Get-SmbMapping -ErrorAction Stop).RemotePath
     } catch {
-        $netLines = & net use 2>$null
+        $netLines = & net use 2>&1
         foreach ($line in $netLines) {
             if ($line -match '(\\\\[^\s]+)') {
                 $uncPaths += $Matches[1]
@@ -53,9 +33,9 @@ function Get-MappedDriveServers {
     }
 
     foreach ($unc in $uncPaths) {
-        if ($unc -match '^\\\\([^\\]+)\\?(.*)') {
+        if ($unc -match '^\\\\([^\\]+)') {
             $server = $Matches[1]
-            if (-not $servers.Contains($server)) {
+            if (-not $servers.ContainsKey($server)) {
                 $servers[$server] = $unc
             }
         }
@@ -64,17 +44,14 @@ function Get-MappedDriveServers {
     return $servers
 }
 
-# ---------------------------------------------------------------------------
-# Add a hostname to ZoneMap\Domains
-# ---------------------------------------------------------------------------
 function Add-HostnameToIntranet {
     param([string]$Hostname, [string]$UncPath)
 
-    $keyPath = Join-Path $DomainsPath $Hostname
-
+    $keyPath  = Join-Path $DomainsPath $Hostname
     $existing = Get-ItemProperty -Path $keyPath -Name 'file' -ErrorAction SilentlyContinue
+
     if ($existing -and $existing.file -eq $IntranetZone) {
-        Write-Host "  SKIP  $Hostname  ($UncPath) -already in Local Intranet zone" -ForegroundColor DarkGray
+        Write-Host "  SKIP   $Hostname  ($UncPath) - already set" -ForegroundColor DarkGray
         return
     }
 
@@ -90,18 +67,16 @@ function Add-HostnameToIntranet {
     Write-Host "  ADDED  $Hostname  ($UncPath)" -ForegroundColor Green
 }
 
-# ---------------------------------------------------------------------------
-# Add an IP address to ZoneMap\Ranges
-# ---------------------------------------------------------------------------
 function Add-IPToIntranet {
     param([string]$IP, [string]$UncPath)
 
-    # Check if already present in any existing Range entry
-    $existing = Get-ChildItem -Path $RangesPath -ErrorAction SilentlyContinue
-    foreach ($range in $existing) {
-        $props = Get-ItemProperty -Path $range.PSPath -ErrorAction SilentlyContinue
-        if ($props -and $props.'<ip>' -eq $IP -and $props.':Range' -eq $IntranetZone) {
-            Write-Host "  SKIP  $IP  ($UncPath) -already in Local Intranet zone" -ForegroundColor DarkGray
+    # Check if this IP already exists in any RangeN entry
+    $ranges = Get-ChildItem -Path $RangesPath -ErrorAction SilentlyContinue
+    foreach ($range in $ranges) {
+        $ipVal    = Get-ItemProperty -Path $range.PSPath -Name '<ip>'    -ErrorAction SilentlyContinue
+        $zoneVal  = Get-ItemProperty -Path $range.PSPath -Name ':Range'  -ErrorAction SilentlyContinue
+        if ($ipVal -and $zoneVal -and $ipVal.'<ip>' -eq $IP -and $zoneVal.':Range' -eq $IntranetZone) {
+            Write-Host "  SKIP   $IP  ($UncPath) - already set" -ForegroundColor DarkGray
             return
         }
     }
@@ -111,25 +86,24 @@ function Add-IPToIntranet {
         return
     }
 
-    # Find next available RangeN slot
     $n = 1
-    while (Test-Path (Join-Path $RangesPath "Range$n")) { $n++ }
-    $newPath = Join-Path $RangesPath "Range$n"
+    while (Test-Path (Join-Path $RangesPath ('Range' + $n))) { $n++ }
+    $newPath = Join-Path $RangesPath ('Range' + $n)
 
     New-Item -Path $newPath -Force | Out-Null
-    Set-ItemProperty -Path $newPath -Name '<ip>'   -Value $IP            -Type String
-    Set-ItemProperty -Path $newPath -Name ':Range' -Value $IntranetZone  -Type DWord
+    Set-ItemProperty -Path $newPath -Name '<ip>'    -Value $IP            -Type String
+    Set-ItemProperty -Path $newPath -Name ':Range'  -Value $IntranetZone  -Type DWord
 
     Write-Host "  ADDED  $IP  ($UncPath) -> Range$n" -ForegroundColor Green
 }
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-$banner = 'Mapped Drive -> Local Intranet Zone Fixer'
-Write-Host "`n$banner" -ForegroundColor Cyan
+# --- Main ---
+
+$banner = 'Mapped Drive - Local Intranet Zone Fixer'
+Write-Host ''
+Write-Host $banner -ForegroundColor Cyan
 Write-Host ('-' * $banner.Length) -ForegroundColor Cyan
-if ($WhatIf) { Write-Host '  (WhatIf mode -no changes will be made)' -ForegroundColor Yellow }
+if ($WhatIf) { Write-Host '  (WhatIf mode - no changes will be made)' -ForegroundColor Yellow }
 Write-Host ''
 
 $servers = Get-MappedDriveServers
@@ -139,7 +113,8 @@ if ($servers.Count -eq 0) {
     exit 0
 }
 
-Write-Host "Found $($servers.Count) mapped drive server(s):`n"
+Write-Host "Found $($servers.Count) mapped drive server(s):"
+Write-Host ''
 
 foreach ($entry in $servers.GetEnumerator()) {
     $server = $entry.Key
@@ -147,7 +122,7 @@ foreach ($entry in $servers.GetEnumerator()) {
     $isIP   = $server -match '^\d{1,3}(\.\d{1,3}){3}$'
 
     if ($isIP) {
-        Add-IPToIntranet   -IP       $server -UncPath $unc
+        Add-IPToIntranet       -IP       $server -UncPath $unc
     } else {
         Add-HostnameToIntranet -Hostname $server -UncPath $unc
     }
@@ -156,6 +131,6 @@ foreach ($entry in $servers.GetEnumerator()) {
 if (-not $WhatIf) {
     Write-Host ''
     Write-Host 'Done.' -ForegroundColor Cyan
-    Write-Host 'Changes take effect immediately for new Explorer windows.' -ForegroundColor DarkGray
+    Write-Host 'Changes take effect for new Explorer windows immediately.' -ForegroundColor DarkGray
     Write-Host 'If previews still fail, sign out and back in to flush the zone cache.' -ForegroundColor DarkGray
 }
