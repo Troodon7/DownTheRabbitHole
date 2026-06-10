@@ -12,7 +12,7 @@
     Hostnames go into ZoneMap\Domains\<hostname>  (file = DWORD 1)
     IP addresses go into ZoneMap\Ranges\RangeN    (:Range = DWORD 1, <ip> = IP)
 
-    No admin rights required — changes are per-user (HKCU).
+    No admin rights required - changes are per-user (HKCU).
 
 .PARAMETER WhatIf
     Show what would be added without writing any registry keys.
@@ -74,7 +74,7 @@ function Add-HostnameToIntranet {
 
     $existing = Get-ItemProperty -Path $keyPath -Name 'file' -ErrorAction SilentlyContinue
     if ($existing -and $existing.file -eq $IntranetZone) {
-        Write-Host "  SKIP  $Hostname  ($UncPath) — already in Local Intranet zone" -ForegroundColor DarkGray
+        Write-Host "  SKIP  $Hostname  ($UncPath) -already in Local Intranet zone" -ForegroundColor DarkGray
         return
     }
 
@@ -101,7 +101,7 @@ function Add-IPToIntranet {
     foreach ($range in $existing) {
         $props = Get-ItemProperty -Path $range.PSPath -ErrorAction SilentlyContinue
         if ($props -and $props.'<ip>' -eq $IP -and $props.':Range' -eq $IntranetZone) {
-            Write-Host "  SKIP  $IP  ($UncPath) — already in Local Intranet zone" -ForegroundColor DarkGray
+            Write-Host "  SKIP  $IP  ($UncPath) -already in Local Intranet zone" -ForegroundColor DarkGray
             return
         }
     }
@@ -129,7 +129,7 @@ function Add-IPToIntranet {
 $banner = 'Mapped Drive -> Local Intranet Zone Fixer'
 Write-Host "`n$banner" -ForegroundColor Cyan
 Write-Host ('-' * $banner.Length) -ForegroundColor Cyan
-if ($WhatIf) { Write-Host '  (WhatIf mode — no changes will be made)' -ForegroundColor Yellow }
+if ($WhatIf) { Write-Host '  (WhatIf mode -no changes will be made)' -ForegroundColor Yellow }
 Write-Host ''
 
 $servers = Get-MappedDriveServers
