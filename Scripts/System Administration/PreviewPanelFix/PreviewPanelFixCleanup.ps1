@@ -11,18 +11,20 @@ Write-Host 'Preview Panel Fix - Cleanup' -ForegroundColor Cyan
 Write-Host '---------------------------' -ForegroundColor Cyan
 Write-Host ''
 
-# Remove bad Ranges entries
+# Remove bad Ranges entries - use GetValueNames() to safely read angle-bracket value names
 $removed = 0
 try {
     $ranges = Get-ChildItem $RangesPath -ErrorAction SilentlyContinue
     foreach ($range in $ranges) {
-        $ipVal = Get-ItemProperty -Path $range.PSPath -Name '<ip>' -ErrorAction SilentlyContinue
-        if ($ipVal) {
-            $ip = $ipVal.'<ip>'
-            Remove-Item -Path $range.PSPath -Force
-            Write-Host "  REMOVED  $($range.PSChildName)  (was: $ip)" -ForegroundColor Green
-            $removed++
-        }
+        try {
+            $key = Get-Item -Path $range.PSPath -ErrorAction SilentlyContinue
+            if ($key -and ($key.GetValueNames() -contains '<ip>')) {
+                $ip = $key.GetValue('<ip>')
+                Remove-Item -Path $range.PSPath -Force
+                Write-Host "  REMOVED  $($range.PSChildName)  (was: $ip)" -ForegroundColor Green
+                $removed++
+            }
+        } catch {}
     }
 } catch {
     Write-Host "  ERROR reading Ranges: $_" -ForegroundColor Red

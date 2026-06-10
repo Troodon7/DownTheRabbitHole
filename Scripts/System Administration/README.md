@@ -42,5 +42,5 @@ PowerShell function that retrieves the product key from a SQL Server 2012 instal
 ### [Active Directory & User Management](Active%20Directory%20%26%20User%20Management/)
 Scripts for Active Directory, local user management, group policy, and credential management.
 
-### [Preview Panel Fix](Preview%20Panel%20Fix/)
+### [PreviewPanelFix](PreviewPanelFix/)
 Fixes the blank preview panel for PDFs and other files on mapped network drives. Scans all mapped drives and adds the UNC server names to the Windows Local Intranet trusted zone via registry. No admin rights needed — double-click the `.bat` to run.

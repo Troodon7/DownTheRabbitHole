@@ -118,11 +118,13 @@ if (-not $WhatIf) {
     try {
         $ranges = Get-ChildItem $rangesPath -ErrorAction SilentlyContinue
         foreach ($range in $ranges) {
-            $ipVal = Get-ItemProperty -Path $range.PSPath -Name '<ip>' -ErrorAction SilentlyContinue
-            if ($ipVal) {
-                Remove-Item -Path $range.PSPath -Force
-                Write-Host "  CLEANED  removed bad Ranges entry: $($range.PSChildName)" -ForegroundColor DarkYellow
-            }
+            try {
+                $key = Get-Item -Path $range.PSPath -ErrorAction SilentlyContinue
+                if ($key -and ($key.GetValueNames() -contains '<ip>')) {
+                    Remove-Item -Path $range.PSPath -Force
+                    Write-Host "  CLEANED  removed bad Ranges entry: $($range.PSChildName)" -ForegroundColor DarkYellow
+                }
+            } catch {}
         }
     } catch {}
 }
