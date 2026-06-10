@@ -70,8 +70,8 @@ function Add-ServerToIntranet {
     param([string]$Server, [string]$UncPath)
 
     $keyPath    = Join-Path $DomainsPath $Server
-    $existing   = Get-ItemProperty -Path $keyPath -Name 'file' -ErrorAction SilentlyContinue
-    $alreadySet = $existing -and $existing.file -eq $IntranetZone
+    $existing   = Get-ItemProperty -Path $keyPath -Name '*' -ErrorAction SilentlyContinue
+    $alreadySet = $existing -and $existing.'*' -eq $IntranetZone
 
     if ($WhatIf) {
         if ($alreadySet) {
@@ -85,7 +85,7 @@ function Add-ServerToIntranet {
     if (-not (Test-Path $keyPath)) {
         New-Item -Path $keyPath -Force | Out-Null
     }
-    Set-ItemProperty -Path $keyPath -Name 'file' -Value $IntranetZone -Type DWord
+    Set-ItemProperty -Path $keyPath -Name '*' -Value $IntranetZone -Type DWord
 
     if ($alreadySet) {
         Write-Host "  OK     $Server  ($UncPath) - verified" -ForegroundColor DarkGray

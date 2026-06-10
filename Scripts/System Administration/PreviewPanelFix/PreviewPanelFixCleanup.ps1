@@ -52,7 +52,7 @@ if ($Reset) {
             $subkey  = $Matches[1]
             $fullKey = "$DomainsReg\$subkey"
             $valOut  = & reg query $fullKey /v file 2>&1
-            if ($valOut -match 'file\s+REG_DWORD\s+0x1') {
+            if ($valOut -match '\*\s+REG_DWORD\s+0x1') {
                 & reg delete $fullKey /f 2>&1 | Out-Null
                 Write-Host "  REMOVED  $subkey" -ForegroundColor Green
                 $removedDomains++
@@ -74,7 +74,7 @@ foreach ($line in $queryOut) {
         $subkey  = $Matches[1]
         $fullKey = "$DomainsReg\$subkey"
         $valOut  = & reg query $fullKey /v file 2>&1
-        if ($valOut -match 'file\s+REG_DWORD\s+0x1') {
+        if ($valOut -match '\*\s+REG_DWORD\s+0x1') {
             Write-Host "  $subkey" -ForegroundColor Green
             $found++
         }
