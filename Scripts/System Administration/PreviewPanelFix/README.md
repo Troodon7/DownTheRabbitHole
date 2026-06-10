@@ -36,7 +36,7 @@ If it still doesn't work, sign out and back in to flush the zone cache.
 The zone trust alone isn't enough — you also need a PDF viewer that registers a Windows Explorer preview handler. **Microsoft Edge does not do this** even when set as the default PDF app; this is a known limitation. The script will warn you if no working handler is found.
 
 Working options (all free):
-- **Adobe Acrobat Reader** — after install, go to Preferences > General > enable "Enable PDF Thumbnail previews in Windows Explorer"
+- **Adobe Acrobat Reader**
 - **Foxit PDF Reader**
 - **PDF-XChange Viewer**
 

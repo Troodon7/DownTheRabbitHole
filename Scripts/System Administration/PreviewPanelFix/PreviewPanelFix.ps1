@@ -231,7 +231,6 @@ foreach ($path in $handlerPaths) {
 if (-not $handlerFound) {
     Write-Host '  Install one of the following to enable PDF previews (all free):' -ForegroundColor Yellow
     Write-Host '    - Adobe Acrobat Reader  https://get.adobe.com/reader/' -ForegroundColor Yellow
-    Write-Host '      (after install: Preferences > General > Enable PDF Thumbnail previews)' -ForegroundColor Yellow
     Write-Host '    - Foxit PDF Reader      https://www.foxit.com/pdf-reader/' -ForegroundColor Yellow
     Write-Host '    - PDF-XChange Viewer    https://www.tracker-software.com/product/pdf-xchange-viewer' -ForegroundColor Yellow
 }
