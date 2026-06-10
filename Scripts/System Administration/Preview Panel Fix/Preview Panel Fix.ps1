@@ -12,7 +12,6 @@ param(
 )
 
 $DomainsPath  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
-$RangesPath   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
 $IntranetZone = 1
 
 function Get-MappedDriveServers {
@@ -67,19 +66,19 @@ function Get-MappedDriveServers {
     return $servers
 }
 
-function Add-HostnameToIntranet {
-    param([string]$Hostname, [string]$UncPath)
+function Add-ServerToIntranet {
+    param([string]$Server, [string]$UncPath)
 
-    $keyPath  = Join-Path $DomainsPath $Hostname
+    $keyPath  = Join-Path $DomainsPath $Server
     $existing = Get-ItemProperty -Path $keyPath -Name 'file' -ErrorAction SilentlyContinue
 
     if ($existing -and $existing.file -eq $IntranetZone) {
-        Write-Host "  SKIP   $Hostname  ($UncPath) - already set" -ForegroundColor DarkGray
+        Write-Host "  SKIP   $Server  ($UncPath) - already set" -ForegroundColor DarkGray
         return
     }
 
     if ($WhatIf) {
-        Write-Host "  WOULD ADD  $Hostname  ($UncPath)" -ForegroundColor Cyan
+        Write-Host "  WOULD ADD  $Server  ($UncPath)" -ForegroundColor Cyan
         return
     }
 
@@ -87,37 +86,7 @@ function Add-HostnameToIntranet {
         New-Item -Path $keyPath -Force | Out-Null
     }
     Set-ItemProperty -Path $keyPath -Name 'file' -Value $IntranetZone -Type DWord
-    Write-Host "  ADDED  $Hostname  ($UncPath)" -ForegroundColor Green
-}
-
-function Add-IPToIntranet {
-    param([string]$IP, [string]$UncPath)
-
-    # Check if this IP already exists in any RangeN entry
-    $ranges = Get-ChildItem -Path $RangesPath -ErrorAction SilentlyContinue
-    foreach ($range in $ranges) {
-        $ipVal    = Get-ItemProperty -Path $range.PSPath -Name '<ip>'    -ErrorAction SilentlyContinue
-        $zoneVal  = Get-ItemProperty -Path $range.PSPath -Name ':Range'  -ErrorAction SilentlyContinue
-        if ($ipVal -and $zoneVal -and $ipVal.'<ip>' -eq $IP -and $zoneVal.':Range' -eq $IntranetZone) {
-            Write-Host "  SKIP   $IP  ($UncPath) - already set" -ForegroundColor DarkGray
-            return
-        }
-    }
-
-    if ($WhatIf) {
-        Write-Host "  WOULD ADD  $IP  ($UncPath)" -ForegroundColor Cyan
-        return
-    }
-
-    $n = 1
-    while (Test-Path (Join-Path $RangesPath ('Range' + $n))) { $n++ }
-    $newPath = Join-Path $RangesPath ('Range' + $n)
-
-    New-Item -Path $newPath -Force | Out-Null
-    Set-ItemProperty -Path $newPath -Name '<ip>'    -Value $IP            -Type String
-    Set-ItemProperty -Path $newPath -Name ':Range'  -Value $IntranetZone  -Type DWord
-
-    Write-Host "  ADDED  $IP  ($UncPath) -> Range$n" -ForegroundColor Green
+    Write-Host "  ADDED  $Server  ($UncPath)" -ForegroundColor Green
 }
 
 # --- Main ---
@@ -140,15 +109,22 @@ Write-Host "Found $($servers.Count) mapped drive server(s):"
 Write-Host ''
 
 foreach ($entry in $servers.GetEnumerator()) {
-    $server = $entry.Key
-    $unc    = $entry.Value
-    $isIP   = $server -match '^\d{1,3}(\.\d{1,3}){3}$'
+    Add-ServerToIntranet -Server $entry.Key -UncPath $entry.Value
+}
 
-    if ($isIP) {
-        Add-IPToIntranet       -IP       $server -UncPath $unc
-    } else {
-        Add-HostnameToIntranet -Hostname $server -UncPath $unc
-    }
+# Clean up any bad Ranges entries written by earlier versions of this script
+if (-not $WhatIf) {
+    $rangesPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
+    try {
+        $ranges = Get-ChildItem $rangesPath -ErrorAction SilentlyContinue
+        foreach ($range in $ranges) {
+            $ipVal = Get-ItemProperty -Path $range.PSPath -Name '<ip>' -ErrorAction SilentlyContinue
+            if ($ipVal) {
+                Remove-Item -Path $range.PSPath -Force
+                Write-Host "  CLEANED  removed bad Ranges entry: $($range.PSChildName)" -ForegroundColor DarkYellow
+            }
+        }
+    } catch {}
 }
 
 if (-not $WhatIf) {
