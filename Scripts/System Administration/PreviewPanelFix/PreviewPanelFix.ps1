@@ -195,14 +195,18 @@ foreach ($path in $handlerPaths) {
         $val   = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
         $clsid = $val.'(default)'
         if ($clsid) {
-            $name = $null
-            try { $name = (Get-ItemProperty "HKCR:\CLSID\$clsid"                    -ErrorAction SilentlyContinue).'(default)' } catch {}
+            $name       = $null
+            $serverPath = $null
+            try { $name = (Get-ItemProperty "HKCR:\CLSID\$clsid" -ErrorAction SilentlyContinue).'(default)' } catch {}
             try { if (-not $name) { $name = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\CLSID\$clsid" -ErrorAction SilentlyContinue).'(default)' } } catch {}
+            try { $serverPath = (Get-ItemProperty "HKCR:\CLSID\$clsid\InprocServer32"  -ErrorAction SilentlyContinue).'(default)' } catch {}
+            try { if (-not $serverPath) { $serverPath = (Get-ItemProperty "HKCR:\CLSID\$clsid\LocalServer32" -ErrorAction SilentlyContinue).'(default)' } } catch {}
+            try { if (-not $serverPath) { $serverPath = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\CLSID\$clsid\InprocServer32" -ErrorAction SilentlyContinue).'(default)' } } catch {}
             $label = if ($name) { $name } else { $clsid }
 
             # Edge registers a CLSID for .pdf but does not implement the Explorer
-            # preview pane interface - treat it the same as no handler
-            $isEdge = $label -match 'Edge|msedge' -or $clsid -match 'Edge|msedge'
+            # preview pane interface - check name AND server path for edge references
+            $isEdge = ($label -match 'Edge|msedge') -or ($serverPath -match 'edge|msedge')
             if ($isEdge) {
                 Write-Host '  WARNING  Microsoft Edge is registered as the PDF handler but does not' -ForegroundColor Yellow
                 Write-Host '           support the Windows Explorer preview pane - previews will not work.' -ForegroundColor Yellow
