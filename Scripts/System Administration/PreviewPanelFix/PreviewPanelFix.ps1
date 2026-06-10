@@ -74,8 +74,8 @@ function Get-MappedDriveServers {
 function Add-IPToIntranet {
     param([string]$IP, [string]$UncPath)
 
-    $alreadySet = $false
-    $existingKey = $null
+    $alreadyCorrect = $false
+    $existingKey    = $null
 
     $queryOut = & reg query $RangesReg 2>&1
     foreach ($line in $queryOut) {
@@ -83,15 +83,18 @@ function Add-IPToIntranet {
             $fullKey  = "$RangesReg\$($Matches[1])"
             $rangeOut = & reg query $fullKey /v ':Range' 2>&1
             if ($rangeOut -match [regex]::Escape($IP)) {
-                $alreadySet  = $true
                 $existingKey = $fullKey
+                $zoneOut     = & reg query $fullKey /v '*' 2>&1
+                if ($zoneOut -match '\*\s+REG_DWORD\s+0x1') {
+                    $alreadyCorrect = $true
+                }
                 break
             }
         }
     }
 
     if ($WhatIf) {
-        if ($alreadySet) {
+        if ($alreadyCorrect) {
             Write-Host "  OK     $IP  ($UncPath) - already set" -ForegroundColor DarkGray
         } else {
             Write-Host "  WOULD ADD  $IP  ($UncPath)" -ForegroundColor Cyan
@@ -99,33 +102,36 @@ function Add-IPToIntranet {
         return
     }
 
-    if ($alreadySet) {
+    if ($alreadyCorrect) {
         & reg add $existingKey /v '*'      /t REG_DWORD /d 1   /f 2>&1 | Out-Null
         & reg add $existingKey /v ':Range' /t REG_SZ    /d $IP /f 2>&1 | Out-Null
         Write-Host "  OK     $IP  ($UncPath) - verified" -ForegroundColor DarkGray
         return
     }
 
-    $n = 1
-    while (Test-Path "$RangesPSH\Range$n") { $n++ }
-    $newKey = "$RangesReg\Range$n"
+    $targetKey = $existingKey
+    if (-not $targetKey) {
+        $n = 1
+        while (Test-Path "$RangesPSH\Range$n") { $n++ }
+        $targetKey = "$RangesReg\Range$n"
+        & reg add $targetKey /f 2>&1 | Out-Null
+    }
 
-    & reg add $newKey /f                                        2>&1 | Out-Null
-    & reg add $newKey /v '*'      /t REG_DWORD /d 1   /f       2>&1 | Out-Null
-    & reg add $newKey /v ':Range' /t REG_SZ    /d $IP /f       2>&1 | Out-Null
+    & reg add $targetKey /v '*'      /t REG_DWORD /d 1   /f 2>&1 | Out-Null
+    & reg add $targetKey /v ':Range' /t REG_SZ    /d $IP /f 2>&1 | Out-Null
 
-    Write-Host "  ADDED  $IP  ($UncPath) -> Range$n" -ForegroundColor Green
+    Write-Host "  ADDED  $IP  ($UncPath)" -ForegroundColor Green
 }
 
 # Hostnames: ZoneMap\Domains\hostname with * = DWORD 1
 function Add-HostnameToIntranet {
     param([string]$Hostname, [string]$UncPath)
 
-    $existing   = & reg query "$DomainsReg\$Hostname" /v '*' 2>&1
-    $alreadySet = $existing -match '\*\s+REG_DWORD\s+0x1'
+    $existing       = & reg query "$DomainsReg\$Hostname" /v '*' 2>&1
+    $alreadyCorrect = $existing -match '\*\s+REG_DWORD\s+0x1'
 
     if ($WhatIf) {
-        if ($alreadySet) {
+        if ($alreadyCorrect) {
             Write-Host "  OK     $Hostname  ($UncPath) - already set" -ForegroundColor DarkGray
         } else {
             Write-Host "  WOULD ADD  $Hostname  ($UncPath)" -ForegroundColor Cyan
@@ -135,7 +141,7 @@ function Add-HostnameToIntranet {
 
     & reg add "$DomainsReg\$Hostname" /v '*' /t REG_DWORD /d 1 /f 2>&1 | Out-Null
 
-    if ($alreadySet) {
+    if ($alreadyCorrect) {
         Write-Host "  OK     $Hostname  ($UncPath) - verified" -ForegroundColor DarkGray
     } else {
         Write-Host "  ADDED  $Hostname  ($UncPath)" -ForegroundColor Green
