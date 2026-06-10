@@ -4,11 +4,13 @@
 # No admin rights required - changes are per-user (HKCU).
 #
 # Usage:
-#   .\Preview Panel Fix.ps1           - apply changes
-#   .\Preview Panel Fix.ps1 -WhatIf   - dry run, no changes written
+#   .\PreviewPanelFix.ps1          - apply changes
+#   .\PreviewPanelFix.ps1 -WhatIf  - dry run, no changes written
+#   .\PreviewPanelFix.ps1 -Force   - rewrite entries even if already set
 
 param(
-    [switch]$WhatIf
+    [switch]$WhatIf,
+    [switch]$Force
 )
 
 $DomainsPath  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
@@ -72,7 +74,7 @@ function Add-ServerToIntranet {
     $keyPath  = Join-Path $DomainsPath $Server
     $existing = Get-ItemProperty -Path $keyPath -Name 'file' -ErrorAction SilentlyContinue
 
-    if ($existing -and $existing.file -eq $IntranetZone) {
+    if ($existing -and $existing.file -eq $IntranetZone -and -not $Force) {
         Write-Host "  SKIP   $Server  ($UncPath) - already set" -ForegroundColor DarkGray
         return
     }
