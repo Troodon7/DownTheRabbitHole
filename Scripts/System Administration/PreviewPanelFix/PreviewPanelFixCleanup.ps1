@@ -46,18 +46,18 @@ if ($Reset) {
     Write-Host ''
     Write-Host 'Checking ZoneMap\Domains...' -ForegroundColor Cyan
     $removedDomains = 0
-    try {
-        $domains = Get-ChildItem $DomainsPSH -ErrorAction SilentlyContinue
-        foreach ($d in $domains) {
-            $val = Get-ItemProperty -Path $d.PSPath -Name 'file' -ErrorAction SilentlyContinue
-            if ($val -and $val.file -eq 1) {
-                & reg delete "$DomainsReg\$($d.PSChildName)" /f 2>&1 | Out-Null
-                Write-Host "  REMOVED  $($d.PSChildName)" -ForegroundColor Green
+    $queryOut = & reg query $DomainsReg 2>&1
+    foreach ($line in $queryOut) {
+        if ($line -match '\\([^\\\s]+)\s*$') {
+            $subkey  = $Matches[1]
+            $fullKey = "$DomainsReg\$subkey"
+            $valOut  = & reg query $fullKey /v file 2>&1
+            if ($valOut -match 'file\s+REG_DWORD\s+0x1') {
+                & reg delete $fullKey /f 2>&1 | Out-Null
+                Write-Host "  REMOVED  $subkey" -ForegroundColor Green
                 $removedDomains++
             }
         }
-    } catch {
-        Write-Host "  ERROR: $_" -ForegroundColor Red
     }
     if ($removedDomains -eq 0) {
         Write-Host '  Nothing to clean up.' -ForegroundColor DarkGray
@@ -67,20 +67,20 @@ if ($Reset) {
 # --- Show remaining Domains entries ---
 Write-Host ''
 Write-Host 'Remaining ZoneMap\Domains entries (file=1):' -ForegroundColor Cyan
-try {
-    $domains = Get-ChildItem $DomainsPSH -ErrorAction SilentlyContinue
-    $found = 0
-    foreach ($d in $domains) {
-        $val = Get-ItemProperty -Path $d.PSPath -Name 'file' -ErrorAction SilentlyContinue
-        if ($val -and $val.file -eq 1) {
-            Write-Host "  $($d.PSChildName)" -ForegroundColor Green
+$found = 0
+$queryOut = & reg query $DomainsReg 2>&1
+foreach ($line in $queryOut) {
+    if ($line -match '\\([^\\\s]+)\s*$') {
+        $subkey  = $Matches[1]
+        $fullKey = "$DomainsReg\$subkey"
+        $valOut  = & reg query $fullKey /v file 2>&1
+        if ($valOut -match 'file\s+REG_DWORD\s+0x1') {
+            Write-Host "  $subkey" -ForegroundColor Green
             $found++
         }
     }
-    if ($found -eq 0) { Write-Host '  (none)' -ForegroundColor DarkGray }
-} catch {
-    Write-Host "  ERROR: $_" -ForegroundColor Red
 }
+if ($found -eq 0) { Write-Host '  (none)' -ForegroundColor DarkGray }
 
 Write-Host ''
 Write-Host 'Done. Close and reopen Internet Options to confirm.' -ForegroundColor Cyan
