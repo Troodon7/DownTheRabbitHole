@@ -202,9 +202,13 @@ foreach ($path in $handlerPaths) {
 
 if (-not $handlerFound) {
     Write-Host '  WARNING  No PDF preview handler found.' -ForegroundColor Yellow
-    Write-Host '           Install Adobe Acrobat Reader (free) or another PDF viewer' -ForegroundColor Yellow
-    Write-Host '           that registers a Windows preview handler (Foxit, PDF-XChange).' -ForegroundColor Yellow
-    Write-Host '           Without this, the preview panel will remain blank for PDFs.' -ForegroundColor Yellow
+    Write-Host '           Microsoft Edge does not register an Explorer preview handler' -ForegroundColor Yellow
+    Write-Host '           even when set as the default PDF app - this is a known limitation.' -ForegroundColor Yellow
+    Write-Host '           Install one of the following (all free):' -ForegroundColor Yellow
+    Write-Host '             - Adobe Acrobat Reader  https://get.adobe.com/reader/' -ForegroundColor Yellow
+    Write-Host '               (after install: Preferences > General > Enable PDF Thumbnail previews)' -ForegroundColor Yellow
+    Write-Host '             - Foxit PDF Reader       https://www.foxit.com/pdf-reader/' -ForegroundColor Yellow
+    Write-Host '             - PDF-XChange Viewer     https://www.tracker-software.com/product/pdf-xchange-viewer' -ForegroundColor Yellow
 }
 
 if (-not $WhatIf) {
