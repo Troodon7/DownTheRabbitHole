@@ -21,9 +21,22 @@ function Get-MappedDriveServers {
     $servers  = @{}
     $uncPaths = @()
 
-    try {
-        $uncPaths = (Get-SmbMapping -ErrorAction Stop).RemotePath
-    } catch {
+    # HKCU:\Network is always visible regardless of elevation level
+    $regDrives = Get-ChildItem 'HKCU:\Network' -ErrorAction SilentlyContinue
+    foreach ($drive in $regDrives) {
+        $remote = (Get-ItemProperty -Path $drive.PSPath -ErrorAction SilentlyContinue).RemotePath
+        if ($remote) { $uncPaths += $remote }
+    }
+
+    # Fallback: Get-SmbMapping (may be empty when elevated)
+    if ($uncPaths.Count -eq 0) {
+        try {
+            $uncPaths = (Get-SmbMapping -ErrorAction Stop).RemotePath
+        } catch {}
+    }
+
+    # Fallback: net use output
+    if ($uncPaths.Count -eq 0) {
         $netLines = & net use 2>&1
         foreach ($line in $netLines) {
             if ($line -match '(\\\\[^\s]+)') {
