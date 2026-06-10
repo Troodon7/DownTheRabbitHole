@@ -6,11 +6,9 @@
 # Usage:
 #   .\PreviewPanelFix.ps1          - apply changes
 #   .\PreviewPanelFix.ps1 -WhatIf  - dry run, no changes written
-#   .\PreviewPanelFix.ps1 -Force   - rewrite entries even if already set
 
 param(
-    [switch]$WhatIf,
-    [switch]$Force
+    [switch]$WhatIf
 )
 
 $DomainsPath  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
@@ -71,16 +69,16 @@ function Get-MappedDriveServers {
 function Add-ServerToIntranet {
     param([string]$Server, [string]$UncPath)
 
-    $keyPath  = Join-Path $DomainsPath $Server
-    $existing = Get-ItemProperty -Path $keyPath -Name 'file' -ErrorAction SilentlyContinue
-
-    if ($existing -and $existing.file -eq $IntranetZone -and -not $Force) {
-        Write-Host "  SKIP   $Server  ($UncPath) - already set" -ForegroundColor DarkGray
-        return
-    }
+    $keyPath    = Join-Path $DomainsPath $Server
+    $existing   = Get-ItemProperty -Path $keyPath -Name 'file' -ErrorAction SilentlyContinue
+    $alreadySet = $existing -and $existing.file -eq $IntranetZone
 
     if ($WhatIf) {
-        Write-Host "  WOULD ADD  $Server  ($UncPath)" -ForegroundColor Cyan
+        if ($alreadySet) {
+            Write-Host "  OK     $Server  ($UncPath) - already set" -ForegroundColor DarkGray
+        } else {
+            Write-Host "  WOULD ADD  $Server  ($UncPath)" -ForegroundColor Cyan
+        }
         return
     }
 
@@ -88,7 +86,12 @@ function Add-ServerToIntranet {
         New-Item -Path $keyPath -Force | Out-Null
     }
     Set-ItemProperty -Path $keyPath -Name 'file' -Value $IntranetZone -Type DWord
-    Write-Host "  ADDED  $Server  ($UncPath)" -ForegroundColor Green
+
+    if ($alreadySet) {
+        Write-Host "  OK     $Server  ($UncPath) - verified" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  ADDED  $Server  ($UncPath)" -ForegroundColor Green
+    }
 }
 
 # --- Main ---
