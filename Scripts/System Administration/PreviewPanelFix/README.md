@@ -54,5 +54,5 @@ Working options (all free):
 
 `PreviewPanelFixCleanup.ps1` has two modes:
 
-- **No flag** — removes only leftover entries from older broken versions of this script (legacy `<ip>`-named entries). Safe to run anytime, won't touch anything else.
-- **`-Reset`** — removes entries for your **currently mapped drives only**, then prompts you to re-run `PreviewPanelFix.bat` to re-add them cleanly. Manually added sites for other servers are left untouched.
+- **No flag** — removes entries for your **currently mapped drives only**. Manually added sites for other servers are left untouched. Re-run `PreviewPanelFix.bat` afterwards to re-add them cleanly.
+- **`-Legacy`** — removes leftover entries from old broken versions of this script (the `<ip>`-named format). You will almost never need this.

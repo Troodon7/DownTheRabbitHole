@@ -1,18 +1,17 @@
 #Requires -Version 3.0
-# Cleans up entries written by PreviewPanelFix.
+# Removes Local Intranet zone entries for current mapped drives written by PreviewPanelFix.
 #
 # Usage:
-#   .\PreviewPanelFixCleanup.ps1         - remove legacy bad entries only (safe)
-#   .\PreviewPanelFixCleanup.ps1 -Reset  - remove entries for current mapped drives only
+#   .\PreviewPanelFixCleanup.ps1          - remove entries for current mapped drives
+#   .\PreviewPanelFixCleanup.ps1 -Legacy  - remove leftover entries from old broken script versions
 
 param(
-    [switch]$Reset
+    [switch]$Legacy
 )
 
 $RangesReg  = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
 $DomainsReg = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
 
-# --- Detect current mapped drive servers (same logic as main script) ---
 function Get-MappedServers {
     $servers  = @{}
     $uncPaths = @()
@@ -53,42 +52,40 @@ Write-Host 'PreviewPanelFix - Cleanup' -ForegroundColor Cyan
 Write-Host '-------------------------' -ForegroundColor Cyan
 Write-Host ''
 
-# --- Remove legacy bad entries (old <ip> format from early script versions) ---
-Write-Host 'Checking for legacy bad entries...' -ForegroundColor Cyan
-$removedLegacy = 0
-$queryOut = & reg query $RangesReg 2>&1
-foreach ($line in $queryOut) {
-    if ($line -match '\\(Range\d+)\s*$') {
-        $fullKey  = "$RangesReg\$($Matches[1])"
-        $valueOut = & reg query $fullKey /v '<ip>' 2>&1
-        if ($valueOut -match '<ip>') {
-            $ip = ($valueOut | Select-String '<ip>') -replace '.*<ip>\s+\S+\s+', ''
-            & reg delete $fullKey /f 2>&1 | Out-Null
-            Write-Host "  REMOVED  $($Matches[1])  (legacy entry, was: $($ip.Trim()))" -ForegroundColor Green
-            $removedLegacy++
+if ($Legacy) {
+    # --- Remove leftover entries from old broken script versions (<ip> value name format) ---
+    Write-Host 'Checking for legacy bad entries...' -ForegroundColor Cyan
+    $removed = 0
+    $queryOut = & reg query $RangesReg 2>&1
+    foreach ($line in $queryOut) {
+        if ($line -match '\\(Range\d+)\s*$') {
+            $fullKey  = "$RangesReg\$($Matches[1])"
+            $valueOut = & reg query $fullKey /v '<ip>' 2>&1
+            if ($valueOut -match '<ip>') {
+                $ip = ($valueOut | Select-String '<ip>') -replace '.*<ip>\s+\S+\s+', ''
+                & reg delete $fullKey /f 2>&1 | Out-Null
+                Write-Host "  REMOVED  $($Matches[1])  (was: $($ip.Trim()))" -ForegroundColor Green
+                $removed++
+            }
         }
     }
-}
-if ($removedLegacy -eq 0) { Write-Host '  Nothing to clean up.' -ForegroundColor DarkGray }
+    if ($removed -eq 0) { Write-Host '  Nothing to clean up.' -ForegroundColor DarkGray }
 
-# --- Reset: remove only entries matching current mapped drives ---
-if ($Reset) {
+} else {
+    # --- Default: remove entries for current mapped drives only ---
     $servers = Get-MappedServers
 
     if ($servers.Count -eq 0) {
-        Write-Host ''
-        Write-Host 'No mapped drives found - nothing to reset.' -ForegroundColor Yellow
+        Write-Host 'No mapped drives found - nothing to remove.' -ForegroundColor Yellow
     } else {
-        Write-Host ''
-        Write-Host "Resetting entries for $($servers.Count) mapped drive server(s)..." -ForegroundColor Cyan
-        $removedReset = 0
+        Write-Host "Removing entries for $($servers.Count) mapped drive server(s)..." -ForegroundColor Cyan
+        $removed = 0
 
         foreach ($entry in $servers.GetEnumerator()) {
             $server = $entry.Key
             $isIP   = $server -match '^\d{1,3}(\.\d{1,3}){3}$'
 
             if ($isIP) {
-                # Find and remove the matching RangeN entry
                 $queryOut = & reg query $RangesReg 2>&1
                 foreach ($line in $queryOut) {
                     if ($line -match '\\(Range\d+)\s*$') {
@@ -97,27 +94,26 @@ if ($Reset) {
                         if ($rangeOut -match [regex]::Escape($server)) {
                             & reg delete $fullKey /f 2>&1 | Out-Null
                             Write-Host "  REMOVED  $server  ($($Matches[1]))" -ForegroundColor Green
-                            $removedReset++
+                            $removed++
                             break
                         }
                     }
                 }
             } else {
-                # Remove the matching Domains entry
                 $valOut = & reg query "$DomainsReg\$server" /v '*' 2>&1
                 if ($valOut -match '\*\s+REG_DWORD\s+0x1') {
                     & reg delete "$DomainsReg\$server" /f 2>&1 | Out-Null
                     Write-Host "  REMOVED  $server" -ForegroundColor Green
-                    $removedReset++
+                    $removed++
                 }
             }
         }
 
-        if ($removedReset -eq 0) { Write-Host '  Nothing to clean up.' -ForegroundColor DarkGray }
+        if ($removed -eq 0) { Write-Host '  Nothing to clean up.' -ForegroundColor DarkGray }
     }
 }
 
-# --- Show remaining entries ---
+# --- Show remaining Ranges entries ---
 Write-Host ''
 Write-Host 'Remaining ZoneMap\Ranges entries:' -ForegroundColor Cyan
 $found = 0
@@ -137,4 +133,4 @@ if ($found -eq 0) { Write-Host '  (none)' -ForegroundColor DarkGray }
 
 Write-Host ''
 Write-Host 'Done. Close and reopen Internet Options to confirm.' -ForegroundColor Cyan
-if ($Reset) { Write-Host 'Run PreviewPanelFix.bat to re-add entries.' -ForegroundColor DarkGray }
+if (-not $Legacy) { Write-Host 'Run PreviewPanelFix.bat to re-add entries.' -ForegroundColor DarkGray }
