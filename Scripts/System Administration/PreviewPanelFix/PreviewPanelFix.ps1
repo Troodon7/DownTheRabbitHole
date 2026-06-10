@@ -173,6 +173,40 @@ foreach ($entry in $servers.GetEnumerator()) {
     }
 }
 
+Write-Host ''
+Write-Host 'Checking PDF preview handler...' -ForegroundColor Cyan
+
+$previewHandlerGuid = '{8895b1c6-b41f-4c1c-a562-0d564250836f}'
+$handlerPaths = @(
+    "HKCU:\SOFTWARE\Classes\.pdf\ShellEx\$previewHandlerGuid",
+    "HKCR:\.pdf\ShellEx\$previewHandlerGuid",
+    "HKLM:\SOFTWARE\Classes\.pdf\ShellEx\$previewHandlerGuid"
+)
+
+$handlerFound = $false
+foreach ($path in $handlerPaths) {
+    try {
+        $val = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+        $clsid = $val.'(default)'
+        if ($clsid) {
+            $name = $null
+            try { $name = (Get-ItemProperty "HKCR:\CLSID\$clsid"           -ErrorAction SilentlyContinue).'(default)' } catch {}
+            try { if (-not $name) { $name = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\CLSID\$clsid" -ErrorAction SilentlyContinue).'(default)' } } catch {}
+            $label = if ($name) { $name } else { $clsid }
+            Write-Host "  OK     PDF preview handler registered: $label" -ForegroundColor Green
+            $handlerFound = $true
+            break
+        }
+    } catch {}
+}
+
+if (-not $handlerFound) {
+    Write-Host '  WARNING  No PDF preview handler found.' -ForegroundColor Yellow
+    Write-Host '           Install Adobe Acrobat Reader (free) or another PDF viewer' -ForegroundColor Yellow
+    Write-Host '           that registers a Windows preview handler (Foxit, PDF-XChange).' -ForegroundColor Yellow
+    Write-Host '           Without this, the preview panel will remain blank for PDFs.' -ForegroundColor Yellow
+}
+
 if (-not $WhatIf) {
     Write-Host ''
     Write-Host 'Done.' -ForegroundColor Cyan
