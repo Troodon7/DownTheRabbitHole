@@ -192,29 +192,35 @@ $handlerPaths = @(
 $handlerFound = $false
 foreach ($path in $handlerPaths) {
     try {
-        $val = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+        $val   = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
         $clsid = $val.'(default)'
         if ($clsid) {
             $name = $null
-            try { $name = (Get-ItemProperty "HKCR:\CLSID\$clsid"           -ErrorAction SilentlyContinue).'(default)' } catch {}
+            try { $name = (Get-ItemProperty "HKCR:\CLSID\$clsid"                    -ErrorAction SilentlyContinue).'(default)' } catch {}
             try { if (-not $name) { $name = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\CLSID\$clsid" -ErrorAction SilentlyContinue).'(default)' } } catch {}
             $label = if ($name) { $name } else { $clsid }
-            Write-Host "  OK     PDF preview handler registered: $label" -ForegroundColor Green
-            $handlerFound = $true
+
+            # Edge registers a CLSID for .pdf but does not implement the Explorer
+            # preview pane interface - treat it the same as no handler
+            $isEdge = $label -match 'Edge|msedge' -or $clsid -match 'Edge|msedge'
+            if ($isEdge) {
+                Write-Host '  WARNING  Microsoft Edge is registered as the PDF handler but does not' -ForegroundColor Yellow
+                Write-Host '           support the Windows Explorer preview pane - previews will not work.' -ForegroundColor Yellow
+            } else {
+                Write-Host "  OK     PDF preview handler registered: $label" -ForegroundColor Green
+                $handlerFound = $true
+            }
             break
         }
     } catch {}
 }
 
 if (-not $handlerFound) {
-    Write-Host '  WARNING  No PDF preview handler found.' -ForegroundColor Yellow
-    Write-Host '           Microsoft Edge does not register an Explorer preview handler' -ForegroundColor Yellow
-    Write-Host '           even when set as the default PDF app - this is a known limitation.' -ForegroundColor Yellow
-    Write-Host '           Install one of the following (all free):' -ForegroundColor Yellow
-    Write-Host '             - Adobe Acrobat Reader  https://get.adobe.com/reader/' -ForegroundColor Yellow
-    Write-Host '               (after install: Preferences > General > Enable PDF Thumbnail previews)' -ForegroundColor Yellow
-    Write-Host '             - Foxit PDF Reader       https://www.foxit.com/pdf-reader/' -ForegroundColor Yellow
-    Write-Host '             - PDF-XChange Viewer     https://www.tracker-software.com/product/pdf-xchange-viewer' -ForegroundColor Yellow
+    Write-Host '  Install one of the following to enable PDF previews (all free):' -ForegroundColor Yellow
+    Write-Host '    - Adobe Acrobat Reader  https://get.adobe.com/reader/' -ForegroundColor Yellow
+    Write-Host '      (after install: Preferences > General > Enable PDF Thumbnail previews)' -ForegroundColor Yellow
+    Write-Host '    - Foxit PDF Reader      https://www.foxit.com/pdf-reader/' -ForegroundColor Yellow
+    Write-Host '    - PDF-XChange Viewer    https://www.tracker-software.com/product/pdf-xchange-viewer' -ForegroundColor Yellow
 }
 
 if (-not $WhatIf) {
