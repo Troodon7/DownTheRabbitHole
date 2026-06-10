@@ -3,31 +3,29 @@
 # Those entries show as ":Range:" with a square character in the Local Intranet Sites UI.
 # Safe to run multiple times.
 
-$RangesPath  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
+$RangesReg   = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
 $DomainsPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains'
 
 Write-Host ''
-Write-Host 'Preview Panel Fix - Cleanup' -ForegroundColor Cyan
-Write-Host '---------------------------' -ForegroundColor Cyan
+Write-Host 'PreviewPanelFix - Cleanup' -ForegroundColor Cyan
+Write-Host '-------------------------' -ForegroundColor Cyan
 Write-Host ''
 
-# Remove bad Ranges entries - use GetValueNames() to safely read angle-bracket value names
+# Use reg.exe directly - PowerShell registry provider chokes on angle-bracket value names
 $removed = 0
-try {
-    $ranges = Get-ChildItem $RangesPath -ErrorAction SilentlyContinue
-    foreach ($range in $ranges) {
-        try {
-            $key = Get-Item -Path $range.PSPath -ErrorAction SilentlyContinue
-            if ($key -and ($key.GetValueNames() -contains '<ip>')) {
-                $ip = $key.GetValue('<ip>')
-                Remove-Item -Path $range.PSPath -Force
-                Write-Host "  REMOVED  $($range.PSChildName)  (was: $ip)" -ForegroundColor Green
-                $removed++
-            }
-        } catch {}
+$queryOut = & reg query $RangesReg 2>&1
+foreach ($line in $queryOut) {
+    if ($line -match '\\(Range\d+)\s*$') {
+        $rangeName = $Matches[1]
+        $fullKey   = "$RangesReg\$rangeName"
+        $valueOut  = & reg query $fullKey /v '<ip>' 2>&1
+        if ($valueOut -match '<ip>') {
+            $ip = ($valueOut | Select-String '<ip>') -replace '.*<ip>\s+\S+\s+',''
+            & reg delete $fullKey /f 2>&1 | Out-Null
+            Write-Host "  REMOVED  $rangeName  (was: $($ip.Trim()))" -ForegroundColor Green
+            $removed++
+        }
     }
-} catch {
-    Write-Host "  ERROR reading Ranges: $_" -ForegroundColor Red
 }
 
 if ($removed -eq 0) {
@@ -53,4 +51,4 @@ try {
 }
 
 Write-Host ''
-Write-Host 'Done.' -ForegroundColor Cyan
+Write-Host 'Done. Close and reopen Internet Options to confirm the entry is gone.' -ForegroundColor Cyan

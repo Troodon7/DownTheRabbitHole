@@ -119,19 +119,18 @@ foreach ($entry in $servers.GetEnumerator()) {
 
 # Clean up any bad Ranges entries written by earlier versions of this script
 if (-not $WhatIf) {
-    $rangesPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
-    try {
-        $ranges = Get-ChildItem $rangesPath -ErrorAction SilentlyContinue
-        foreach ($range in $ranges) {
-            try {
-                $key = Get-Item -Path $range.PSPath -ErrorAction SilentlyContinue
-                if ($key -and ($key.GetValueNames() -contains '<ip>')) {
-                    Remove-Item -Path $range.PSPath -Force
-                    Write-Host "  CLEANED  removed bad Ranges entry: $($range.PSChildName)" -ForegroundColor DarkYellow
-                }
-            } catch {}
+    $rangesReg = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Ranges'
+    $queryOut  = & reg query $rangesReg 2>&1
+    foreach ($line in $queryOut) {
+        if ($line -match '\\(Range\d+)\s*$') {
+            $fullKey  = "$rangesReg\$($Matches[1])"
+            $valueOut = & reg query $fullKey /v '<ip>' 2>&1
+            if ($valueOut -match '<ip>') {
+                & reg delete $fullKey /f 2>&1 | Out-Null
+                Write-Host "  CLEANED  removed bad Ranges entry: $($Matches[1])" -ForegroundColor DarkYellow
+            }
         }
-    } catch {}
+    }
 }
 
 if (-not $WhatIf) {
